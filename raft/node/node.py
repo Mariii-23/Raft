@@ -2,6 +2,8 @@ from __future__ import annotations
 from abc import ABC
 from typing import Any
 from key_value_store import KeyValueStore
+from utils.ms import reply
+import logging
 
 NodeID = str
 
@@ -11,10 +13,16 @@ class Entry:
     command: Any  # for now
 
 
+    def __init__(self, term: int, command: Any) -> None:
+        self.term = term
+        self.command = command
+
+
 class Node(ABC):
     _node_id: NodeID
     _node_ids: list[NodeID]
     _store: KeyValueStore
+    _valid_state: bool
 
     # Raft vars
     _current_term: int
@@ -27,9 +35,47 @@ class Node(ABC):
         self._node_id = node_id
         self._node_ids = node_ids
         self._store = KeyValueStore()
+        self._valid_state = True
 
         self._current_term = 0
         self._voted_for = None
         self._log = []
         self._commit_index = 0
         self._last_applied = 0
+
+
+    def is_from_client(self, msg) -> bool:
+        return msg.src not in [self._node_id] + self._node_ids
+
+
+    def handle(self, msg) -> Node:
+        # If RPC request or response contains term T > currentTerm:
+        #   set currentTerm = T, convert to follower (§5.1)
+        if not self.is_from_client(msg):
+            if msg.body.term > self._current_term:
+                self._valid_state = False
+                self._current_term = msg.body.term
+                self._voted_for = None
+                return Follower(self).handle(msg) # Follower.from_state(self).handle(msg)
+
+        match msg.body.type:
+            case 'read' | 'write' | 'cas':
+                return self.handle_kvs_op(msg)
+
+            case 'append_entries':
+                return self.handle_append_entries(msg)
+
+            case 'append_entries_response':
+                return self.handle_append_entries_response(msg)
+
+            case _:
+                logging.warning('unknown message type %s', msg.body.type)
+                return self
+
+
+    def handle_kvs_op(self, msg) -> Node:
+        reply(msg, type='error', code=11, text='only the leader can handle requests')
+        return self
+
+
+from node.follower import Follower

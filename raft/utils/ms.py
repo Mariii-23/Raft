@@ -8,7 +8,6 @@ from os import _exit
 
 msg_id = 0
 
-
 def send(src, dest, **body):
     global msg_id
     data = dumps(
