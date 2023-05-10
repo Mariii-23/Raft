@@ -5,8 +5,7 @@ from math import ceil
 from leader import Leader
 from time import time, sleep
 from random import uniform
-from utils.ms import send
-from follower import Follower
+from utils.ms import send, reply
 from threading import Thread
 
 # TODO: change
@@ -27,6 +26,8 @@ class Candidate(Node):
         self._voters = set()
         self._voters.add(self._node_id)
         self._majority = ceil(len(node_ids) / 2)
+
+        self._voted_for = node_id
 
         Thread(target=self.check_election_timer).start()
 
@@ -93,3 +94,7 @@ class Candidate(Node):
             return Candidate.transition_from(self)
 
         return self
+
+    def handle_request_vote(self, msg) -> Node:
+        reply(msg, type="request_vote_response",
+              term=self._term, vote_granted=False)
