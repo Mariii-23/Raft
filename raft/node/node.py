@@ -91,5 +91,12 @@ class Node(ABC):
             len(self._log) >= index and self._log[index - 1].term == term
         )
 
+    # Check if received log is at least as up-to-date to the current log
+    def log_is_up_to_date(self, last_log_index: int, last_log_term: int) -> bool:
+        my_term = self._log[-1].term if len(self._log) > 0 else 0
+        if my_term != last_log_term:
+            return last_log_term > my_term
+        return last_log_index >= len(self._log)
+
 
 from node.follower import Follower
