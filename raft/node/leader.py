@@ -1,5 +1,5 @@
 from math import ceil
-from node import Node, NodeID, Entry
+from node.node import Node, NodeID, Entry
 from utils.ms import reply
 import logging
 

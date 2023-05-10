@@ -23,11 +23,37 @@ class Follower(Node):
     def handle_append_entries(self, msg) -> Node:
         self.reset_timeout()
 
-        if msg.body.term < self._current_term:
+        # 1 . Older term &&
+        # 2. Log doesn't contain entry at prev_log_index which matches prev term
+        if msg.body.term < self._current_term or not self.log_contains(
+            msg.body.prev_log_index, msg.body.prev_log_term
+        ):
             reply(
                 msg,
                 type="append_entries_response",
                 term=self._current_term,
                 success=False,
             )
-        # TODO
+        else:
+            # 3. If existing entry conflicts with new one, delete existing entry and all that follow it
+            # &&
+            # 4. Append any new entries not already in the log
+            self._log[msg.body.prev_log_index :] = msg.body.entries
+
+            # 5. If leader commit > commit index, set commit index to min(leader commit, index of last new entry)
+            if msg.body.leader_commit > self._commit_index:
+                self._commit_index = min(msg.body.leader_commit, len(self._log))
+                self.apply()
+
+            # TODO averiguar se é importante responder ao heartbeat
+            # Responde se não for heartbeat
+            if len(msg.body.entries) > 0:
+                reply(
+                    msg,
+                    type="append_entries_response",
+                    term=self._current_term,
+                    success=True,
+                    last_index=len(self._log),
+                )
+
+        return self
