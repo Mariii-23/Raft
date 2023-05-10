@@ -57,12 +57,16 @@ class Node(ABC):
     def is_from_client(self, msg) -> bool:
         return msg.src not in [self._node_id] + self._node_ids
 
+    def is_from_self(self, msg) -> bool:
+        return msg.src == self._node_id
+
     def handle(self, msg) -> Node:
         # If RPC request or response contains term T > currentTerm:
-        #   set currentTerm = T, convert to follower (§5.1)
-        if not self.is_from_client(msg):
+        #   set currentTerm = T, convert to follower
+        if not self.is_from_client(msg) and not self.is_from_self(msg):
+            # Every message that is not from a client nor from the node itself
+            # is a RAFT RPC call, that has a term
             if msg.body.term > self._current_term:
-                self._valid_state = False
                 self._current_term = msg.body.term
                 self._voted_for = None
                 return Follower.transition_from(self).handle(msg)
@@ -71,16 +75,13 @@ class Node(ABC):
             case "read" | "write" | "cas":
                 return self.handle_kvs_op(msg)
 
-            case "append_entries":
-                # reply false if term < currentTerm (§5.1)
-                return self.handle_append_entries(msg)
-
-            case "append_entries_response":
-                return self.handle_append_entries_response(msg)
-
             case _:
-                logging.warning("unknown message type %s", msg.body.type)
-                return self
+                try:
+                    return getattr(self, "handle_" + msg.body.type)(msg)
+
+                except AttributeError:
+                    logging.warning("unknown message type %s", msg.body.type)
+                    return self
 
     def handle_request_vote(self, msg):
         # Reset timer
@@ -106,6 +107,37 @@ class Node(ABC):
     def handle_kvs_op(self, msg) -> Node:
         reply(msg, type="error", code=11, text="only the leader can handle requests")
         return self
+
+    def apply(self) -> None:
+        """
+        Apply commited messages that still weren't applied
+        """
+        for entry in self._log[self._last_applied + 1 : self._commit_index + 1]:
+            match entry.command.body.type:
+                case "read":
+                    self.apply_read(entry.command)
+
+                case "write":
+                    self.apply_write(entry.command)
+
+                case "cas":
+                    self.apply_cas(entry.command)
+
+    def apply_read(self, command) -> None:
+        pass
+
+    def apply_write(self, command) -> None:
+        self._store.write(command.body.key, command.body.value)
+
+    def apply_cas(self, command) -> None:
+        value = self._store.read(command.body.key)
+
+        if value is None:
+            return
+        elif value != command.body.__dict__["from"]:
+            return
+        else:
+            self._store.write(command.body.key, command.body.to)
 
     def log_contains(self, index: int, term: int) -> bool:
         return index == 0 or (
