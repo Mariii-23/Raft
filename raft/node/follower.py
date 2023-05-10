@@ -63,6 +63,7 @@ class Follower(Node):
         return Candidate.transition_from(self)
 
     def handle_request_vote(self, msg):
+        # Reset timer
         grant_vote: bool = False
         if (
             msg.body.term >= self._current_term
@@ -72,6 +73,7 @@ class Follower(Node):
             and self.log_is_up_to_date(msg.body.last_log_index, msg.body.last_log_term)
         ):
             grant_vote = True
+            self._voted_for = msg.body.candidate_id
 
         reply(
             msg,
