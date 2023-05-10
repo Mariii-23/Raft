@@ -63,24 +63,8 @@ class Follower(Node):
         return Candidate.transition_from(self)
 
     def handle_request_vote(self, msg):
-        # Reset timer
-        grant_vote: bool = False
-        if (
-            msg.body.term >= self._current_term
-            # hasn't voted for a different candidate
-            and self._voted_for in [None, msg.body.candidate_id]
-            # candidate's log is at least as up-to-date as receiver's log
-            and self.log_is_up_to_date(msg.body.last_log_index, msg.body.last_log_term)
-        ):
-            grant_vote = True
-            self._voted_for = msg.body.candidate_id
-
-        reply(
-            msg,
-            type="request_vote_response",
-            term=self._current_term,
-            vote_granted=grant_vote,
-        )
+        self.reset_timeout()
+        return super().handle_request_vote(msg)
 
 
 from node.candidate import Candidate
