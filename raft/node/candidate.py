@@ -1,5 +1,5 @@
 import logging
-from node import Node, NodeID
+from node.node import Node, NodeID
 from time import time
 from math import ceil
 from leader import Leader
@@ -47,7 +47,7 @@ class Candidate(Node):
         self._election_timer = uniform(ELECTION_TIMEOUT / 2, ELECTION_TIMEOUT)
         self._next_election_timer = time() + self._election_timer
 
-    def check_timeout(self):
+    def check_election_timer(self):
         #  Waits until the node reaches the election timeout
         while self._valid_state and time() < self._next_election_timer:
             sleep(self._election_timer)
@@ -94,7 +94,3 @@ class Candidate(Node):
             return Candidate.transition_from(self)
 
         return self
-
-    def handle_request_vote(self, msg) -> Node:
-        reply(msg, type="request_vote_response",
-              term=self._term, vote_granted=False)

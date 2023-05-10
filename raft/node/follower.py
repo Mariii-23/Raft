@@ -1,5 +1,6 @@
+from node.candidate import Candidate
 import logging
-from node import Node, NodeID
+from node.node import Node, NodeID
 from time import time
 from utils.ms import reply
 from random import uniform
@@ -38,11 +39,12 @@ class Follower(Node):
             # 3. Delete conflicting entry and all that follow it
             # &&
             # 4. Append any new entries not already in the log
-            self._log[msg.body.prev_log_index :] = msg.body.entries
+            self._log[msg.body.prev_log_index:] = msg.body.entries
 
             # 5. If leader commit > commit index, set commit index to min(leader commit, index of last new entry)
             if msg.body.leader_commit > self._commit_index:
-                self._commit_index = min(msg.body.leader_commit, len(self._log))
+                self._commit_index = min(
+                    msg.body.leader_commit, len(self._log))
                 self.apply()
 
             # TODO averiguar se é importante responder ao heartbeat
@@ -65,6 +67,3 @@ class Follower(Node):
     def handle_request_vote(self, msg):
         self.reset_timeout()
         return super().handle_request_vote(msg)
-
-
-from node.candidate import Candidate
