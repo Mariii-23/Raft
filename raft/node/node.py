@@ -2,6 +2,8 @@ from __future__ import annotations
 from abc import ABC
 from typing import Any
 from utils.ms import reply
+from utils.random_timer import RandomTimer
+from multitimer import MultiTimer
 import logging
 from key_value_store import KeyValueStore
 
@@ -21,7 +23,7 @@ class Node(ABC):
     _node_id: NodeID
     _node_ids: list[NodeID]
     _store: KeyValueStore
-    _valid_state: bool
+    _timer: RandomTimer | MultiTimer
 
     # Raft vars
     _current_term: int
@@ -34,7 +36,6 @@ class Node(ABC):
         self._node_id = node_id
         self._node_ids = node_ids
         self._store = KeyValueStore()
-        self._valid_state = True
 
         self._current_term = 0
         self._voted_for = None
@@ -44,7 +45,7 @@ class Node(ABC):
 
     @classmethod
     def transition_from(cls, node: Node):
-        node._valid_state = False
+        node._timer.cancel()
         new_state = cls(node._node_id, node._node_ids)
         new_state._store = node._store
         new_state._current_term = node._current_term
@@ -84,7 +85,6 @@ class Node(ABC):
                     return self
 
     def handle_request_vote(self, msg):
-        # Reset timer
         grant_vote: bool = False
         if (
             msg.body.term >= self._current_term

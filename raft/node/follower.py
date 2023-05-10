@@ -2,27 +2,32 @@ from node.candidate import Candidate
 import logging
 from node.node import Node, NodeID
 from time import time
-from utils.ms import reply
+from utils.ms import reply, send
+from utils.random_timer import RandomTimer
+from config import LOWER_TIMEOUT, UPPER_TIMEOUT
 from random import uniform
+from threading import Thread
 
 
 class Follower(Node):
-    _next_timeout: float
+    _timer: RandomTimer
 
     def __init__(self, node_id: NodeID, node_ids: list[NodeID]) -> None:
         super().__init__(node_id, node_ids)
-        self.reset_timeout()
+        self._timer = RandomTimer(LOWER_TIMEOUT, UPPER_TIMEOUT, self.handle_timeout)
+        self._timer.start()
+        logging.info("init follower")
 
     @classmethod
     def transition_from(cls, node: Node):
         logging.info(f"Transitioning from {node} to Follower")
         return super().transition_from(node)
 
-    def reset_timeout(self) -> None:
-        self._next_timeout = time()  # + uniform() TODO
+    def handle_timeout(self) -> None:
+        send(self._node_id, self._node_id, type="turn_candidate")
 
     def handle_append_entries(self, msg) -> Node:
-        self.reset_timeout()
+        self._timer.reset()
 
         # 1 . Older term &&
         # 2. Log doesn't contain entry at prev_log_index which matches prev term
@@ -39,12 +44,11 @@ class Follower(Node):
             # 3. Delete conflicting entry and all that follow it
             # &&
             # 4. Append any new entries not already in the log
-            self._log[msg.body.prev_log_index:] = msg.body.entries
+            self._log[msg.body.prev_log_index :] = msg.body.entries
 
             # 5. If leader commit > commit index, set commit index to min(leader commit, index of last new entry)
             if msg.body.leader_commit > self._commit_index:
-                self._commit_index = min(
-                    msg.body.leader_commit, len(self._log))
+                self._commit_index = min(msg.body.leader_commit, len(self._log))
                 self.apply()
 
             # TODO averiguar se é importante responder ao heartbeat
@@ -65,5 +69,5 @@ class Follower(Node):
         return Candidate.transition_from(self)
 
     def handle_request_vote(self, msg):
-        self.reset_timeout()
+        self._timer.reset()
         return super().handle_request_vote(msg)
