@@ -86,5 +86,10 @@ class Node(ABC):
         reply(msg, type="error", code=11, text="only the leader can handle requests")
         return self
 
+    def log_contains(self, index: int, term: int) -> bool:
+        return index == 0 or (
+            len(self._log) >= index and self._log[index - 1].term == term
+        )
+
 
 from node.follower import Follower

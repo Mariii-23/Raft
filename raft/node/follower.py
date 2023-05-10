@@ -35,7 +35,7 @@ class Follower(Node):
                 success=False,
             )
         else:
-            # 3. If existing entry conflicts with new one, delete existing entry and all that follow it
+            # 3. Delete conflicting entry and all that follow it
             # &&
             # 4. Append any new entries not already in the log
             self._log[msg.body.prev_log_index :] = msg.body.entries
