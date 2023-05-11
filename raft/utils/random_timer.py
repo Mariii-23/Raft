@@ -20,3 +20,6 @@ class RandomTimer:
         self._timer.cancel()
         self._timer = self._create_timer()
         self._timer.start()
+
+    def stop(self):
+        self._timer.cancel()

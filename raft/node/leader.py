@@ -14,7 +14,8 @@ class Leader(Node):
 
     def __init__(self, node_id: NodeID, node_ids: list[NodeID]):
         super().__init__(node_id, node_ids)
-        self._timer = MultiTimer(HEARTBIT_RATE, self.heartbeat)
+        self._timer = MultiTimer(HEARTBIT_RATE, self.heartbeat, runonstart=False)
+        self._timer.start()
         self._next_index = dict.fromkeys(node_ids, 0)
         self._match_index = dict.fromkeys(node_ids, 1)
         self._voted_for = node_id
