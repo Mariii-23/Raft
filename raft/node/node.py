@@ -114,6 +114,7 @@ class Node(ABC):
         Apply commited messages that still weren't applied
         """
         for entry in self._log[self._last_applied + 1 - 1 : self._commit_index + 1 - 1]:
+            self._last_applied += 1
             match entry.command.body.type:
                 case "read":
                     self.apply_read(entry.command)
