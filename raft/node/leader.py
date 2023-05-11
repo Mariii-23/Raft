@@ -32,7 +32,7 @@ class Leader(Node):
         return new_state
 
     def heartbeat(self):
-        send(self._node_id, self._node_ids, type="heartbeat")
+        send(self._node_id, self._node_id, type="heartbeat")
 
     # Message handlers
 
