@@ -1,14 +1,11 @@
 from __future__ import annotations
 import logging
 from node.node import Node, NodeID
-from utils.constants import LOWER_TIMEOUT, UPPER_TIMEOUT
-from time import time
+from config import LOWER_TIMEOUT, UPPER_TIMEOUT
 from math import ceil
-from leader import Leader
-from time import time, sleep
-from random import uniform
-from raft.utils.random_timer import RandomTimer
-from utils.ms import send, reply
+from node.leader import Leader
+from utils.random_timer import RandomTimer
+from utils.ms import send
 
 
 class Candidate(Node):
