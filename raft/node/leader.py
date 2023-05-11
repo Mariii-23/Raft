@@ -87,7 +87,7 @@ class Leader(Node):
             type="append_entries",
             term=self._current_term,
             leader_id=self._node_id,
-            prev_log_idx=prev_log_idx,
+            prev_log_index=prev_log_idx,
             prev_log_term=prev_log_term,
             entries=entries,
             leader_commit=self._commit_index,

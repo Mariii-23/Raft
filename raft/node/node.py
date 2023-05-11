@@ -77,12 +77,13 @@ class Node(ABC):
                 return self.handle_kvs_op(msg)
 
             case _:
-                try:
-                    return getattr(self, "handle_" + msg.body.type)(msg)
+                return getattr(
+                    self, f"handle_{msg.body.type}", self.handle_unknown_message
+                )(msg)
 
-                except AttributeError:
-                    logging.warning("unknown message type %s", msg.body.type)
-                    return self
+    def handle_unknown_message(self, msg):
+        logging.warning(f"unknown message type {msg.body.type}")
+        return self
 
     def handle_request_vote(self, msg):
         grant_vote: bool = False
