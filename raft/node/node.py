@@ -45,7 +45,7 @@ class Node(ABC):
 
     @classmethod
     def transition_from(cls, node: Node):
-        node._timer.cancel()
+        node._timer.stop()
         new_state = cls(node._node_id, node._node_ids)
         new_state._store = node._store
         new_state._current_term = node._current_term
@@ -123,21 +123,21 @@ class Node(ABC):
                 case "cas":
                     self.apply_cas(entry.command)
 
-    def apply_read(self, command) -> None:
+    def apply_read(self, msg) -> None:
         pass
 
-    def apply_write(self, command) -> None:
-        self._store.write(command.body.key, command.body.value)
+    def apply_write(self, msg) -> None:
+        self._store.write(msg.body.key, msg.body.value)
 
-    def apply_cas(self, command) -> None:
-        value = self._store.read(command.body.key)
+    def apply_cas(self, msg) -> None:
+        value = self._store.read(msg.body.key)
 
         if value is None:
             return
-        elif value != command.body.__dict__["from"]:
+        elif value != msg.body.__dict__["from"]:
             return
         else:
-            self._store.write(command.body.key, command.body.to)
+            self._store.write(msg.body.key, msg.body.to)
 
     def log_contains(self, index: int, term: int) -> bool:
         return index == 0 or (
