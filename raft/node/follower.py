@@ -49,16 +49,13 @@ class Follower(Node):
                 self._commit_index = min(msg.body.leader_commit, len(self._log))
                 self.apply()
 
-            # TODO averiguar se é importante responder ao heartbeat
-            # Responde se não for heartbeat
-            if len(msg.body.entries) > 0:
-                reply(
-                    msg,
-                    type="append_entries_response",
-                    term=self._current_term,
-                    success=True,
-                    last_index=len(self._log),
-                )
+            reply(
+                msg,
+                type="append_entries_response",
+                term=self._current_term,
+                success=True,
+                last_index=len(self._log),
+            )
 
         return self
 
