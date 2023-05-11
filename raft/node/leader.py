@@ -24,6 +24,7 @@ class Leader(Node):
 
     @classmethod
     def transition_from(cls, node: Node) -> Leader:
+        logging.info(f"Transitioning from {node} to Leader")
         new_state: Leader = super().transition_from(node)
         new_state._next_index = dict.fromkeys(
             new_state._node_ids, len(new_state._log) + 1

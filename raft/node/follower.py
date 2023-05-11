@@ -1,12 +1,10 @@
+from __future__ import annotations
 from node.candidate import Candidate
 import logging
 from node.node import Node, NodeID
-from time import time
 from utils.ms import reply, send
 from utils.random_timer import RandomTimer
 from config import LOWER_TIMEOUT, UPPER_TIMEOUT
-from random import uniform
-from threading import Thread
 
 
 class Follower(Node):
@@ -19,14 +17,14 @@ class Follower(Node):
         logging.info("init follower")
 
     @classmethod
-    def transition_from(cls, node: Node):
+    def transition_from(cls, node: Node) -> Follower:
         logging.info(f"Transitioning from {node} to Follower")
         return super().transition_from(node)
 
     def handle_timeout(self) -> None:
         send(self._node_id, self._node_id, type="turn_candidate")
 
-    def handle_append_entries(self, msg) -> Node:
+    def handle_append_entries(self, msg) -> Follower:
         self._timer.reset()
 
         # 1 . Older term &&
@@ -65,7 +63,7 @@ class Follower(Node):
         return self
 
     # Handle message sent to self
-    def handle_turn_candidate(self, msg):
+    def handle_turn_candidate(self, msg) -> Candidate:
         return Candidate.transition_from(self)
 
     def handle_request_vote(self, msg):
