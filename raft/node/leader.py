@@ -1,3 +1,4 @@
+from __future__ import annotations
 from math import ceil
 from node.node import Node, NodeID, Entry
 from utils.ms import send, reply
@@ -21,17 +22,25 @@ class Leader(Node):
         self._voted_for = node_id
         logging.info("Leader %s initialized", node_id)
 
+    @classmethod
+    def transition_from(cls, node: Node) -> Leader:
+        new_state: Leader = super().transition_from(node)
+        new_state._next_index = dict.fromkeys(
+            new_state._node_ids, len(new_state._log) + 1
+        )
+        return new_state
+
     def heartbeat(self):
         send(self._node_id, self._node_ids, type="heartbeat")
 
     # Message handlers
 
-    def handle_heartbeat(self, msg) -> Node:
+    def handle_heartbeat(self, msg) -> Leader:
         self.append_empty_entries_to_all()
 
         return self
 
-    def handle_kvs_op(self, msg) -> Node:
+    def handle_kvs_op(self, msg) -> Leader:
         self._log.append(Entry(self._current_term, msg))
 
         if len(self._node_ids) > 0:
@@ -41,7 +50,7 @@ class Leader(Node):
 
         return self
 
-    def handle_append_entries_response(self, msg) -> Node:
+    def handle_append_entries_response(self, msg) -> Leader:
         if msg.body.success:
             # If successful:
             #   update nextIndex and matchIndex for follower
