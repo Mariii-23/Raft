@@ -1,8 +1,9 @@
 from __future__ import annotations
 from raft.node.node import Node, NodeID
 from raft.node.follower import Follower
+from raft.utils.ms import send, reply
 import math
-from random import uniform
+from random import uniform, sample
 from typing import Tuple, Any
 
 
@@ -22,6 +23,7 @@ class GatewayNode:
         self._node_ids = node_ids
         self._raft_node = Follower(node_id, node_ids)
         self._quorum_read_fraction = self.compute_quorum_read_fraction()
+        self._quorum_responses = {}
 
     def compute_quorum_read_fraction(self):
         # Current node id was already removed
@@ -80,24 +82,42 @@ class GatewayNode:
         pass
 
     def quorum_read(self, msg):
-        pass
+        # majority of all nodes, not counting with self
+        majority = math.ceil(len(self._node_ids) / 2)
+        quorum = sample(self._node_ids, majority)
+        for node_id in quorum:
+            send(
+                self._node_id,
+                node_id,
+                type="quorum_read",
+                key=msg.key,
+                client_req_id=msg.id,
+            )
+        my_quorum_response = build_quorum_read_response(msg.key)
+        self._quorum_responses[msg.id] = QuorumReadState(msg.id, my_quorum_response)
+        # esperar até ter maioria + 1 no dicionario
+        # fazer reset ao dicionario
 
 
 class QuorumReadResponse:
     _timestamp: int
-    _data: Any
+    # Empty if
+    _data: Any | None
+    # True if there is no write intent for that key
+    _has_conflict: bool
 
-    def __init__(self, timestamp: int, data: Any):
+    def __init__(self, timestamp: int, data: Any, has_conflict: bool):
         self._timestamp = timestamp
         self._data = data
+        self._has_conflict = has_conflict
 
 
 class QuorumReadState:
     _client_id: ClientID
     _number_responses: int
-    _most_updated_response: QuorumReadResponse | None
+    _most_updated_response: QuorumReadResponse
 
-    def __init__(self, client_id: ClientID):
+    def __init__(self, client_id: ClientID, most_updated_response: QuorumReadResponse):
         self._client_id = client_id
-        self._number_responses = 0
-        self._most_updated_response = None
+        self._number_responses = 1
+        self._most_updated_response = most_updated_response
