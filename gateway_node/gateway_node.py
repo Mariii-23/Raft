@@ -1,6 +1,7 @@
 from __future__ import annotations
 from raft.node.node import Node, NodeID
 from raft.node.follower import Follower
+import logging
 from raft.utils.ms import send, reply
 import math
 from random import uniform, sample
@@ -88,20 +89,16 @@ class GatewayNode:
         return math.ceil(len(self._node_ids) / 2)
 
     def handle(self, msg):
-
         match msg.body.type:
-            case "read":
-                self.handle_read(msg)
-            case "quorum_read":
-                pass
-            case "quorum_read_response":
-                pass
-            case "leaseholder_read":
-                pass
-            case "leaseholder_read_response":
-                pass
-            case _:
+            case "write" | "cas":
                 self._raft_node = self._raft_node.handle(msg)
+            case _:
+                getattr(self, "handle_" + msg.body.type, self.handle_unknown_message)(
+                    msg
+                )
+
+    def handle_unknown_message(self, msg):
+        logging.warning(f"Unknown message type {msg.body.type}")
 
     def handle_read(self, msg):
         if self.is_leaseholder():
