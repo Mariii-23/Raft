@@ -138,9 +138,9 @@ class Leader(Node):
         # and log[N].term == currentTerm:
         #   set commitIndex = N
         log_indexes = [i for i in self._match_index.values() if i > self._commit_index]
-        majority = ceil(len(self._node_ids) / 2)
+        majority = ceil((len(self._node_ids) + 1) / 2)
 
-        if len(log_indexes) >= majority:
+        if len(log_indexes) + 1 >= majority:
             next_commit_index = min(log_indexes, default=len(self._log))
             if self._log[next_commit_index - 1].term == self._current_term:
                 self._commit_index = next_commit_index
