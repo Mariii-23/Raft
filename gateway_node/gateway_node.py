@@ -24,12 +24,13 @@ class GatewayNode:
         self._quorum_read_fraction = self.compute_quorum_read_fraction()
 
     def compute_quorum_read_fraction(self):
-        n = len(self._node_ids)
+        # Current node id was already removed
+        n = len(self._node_ids) + 1
         p = self.prob_included_majority()
         return 1 - ((p * (n - 2)) / (n + p * (n - 2)))
 
     def prob_included_majority(self):
-        n = len(self._node_ids)
+        n = len(self._node_ids) + 1
         if n == 3:
             return 1
         else:
