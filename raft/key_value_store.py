@@ -1,5 +1,6 @@
 from typing import Any
 
+
 class KeyValueStore:
     _store: dict[Any, Any]
 

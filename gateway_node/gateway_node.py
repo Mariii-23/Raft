@@ -4,7 +4,7 @@ from raft.node.follower import Follower
 from raft.utils.ms import send, reply
 import math
 from random import uniform, sample
-from typing import Tuple, Any
+from typing import Any
 
 
 MsgID = int
@@ -67,7 +67,13 @@ class GatewayNode:
                 self.leaseholder_read(msg)
 
     def handle_quorum_read(self, msg):
-        pass
+        quorum_read_response = self.build_quorum_read_response(msg.body.key)
+        reply(
+            msg,
+            type="quorum_read_response",
+            client_req_id=msg.body.client_req_id,
+            **quorum_read_response.__dict__,
+        )
 
     def handle_quorum_read_response(self, msg):
         pass
@@ -93,15 +99,40 @@ class GatewayNode:
                 key=msg.key,
                 client_req_id=msg.id,
             )
-        my_quorum_response = build_quorum_read_response(msg.key)
+        my_quorum_response = self.build_quorum_read_response(msg.key)
         self._quorum_responses[msg.id] = QuorumReadState(msg.id, my_quorum_response)
         # esperar até ter maioria + 1 no dicionario
         # fazer reset ao dicionario
 
+    def has_conflict(self, key) -> bool:
+        log = self._raft_node.get_log()
+        last_applied = self._raft_node.get_last_applied()
+
+        for entry in log[last_applied + 1 - 1 :]:
+            match entry.command.body.type:
+                case "write" | "cas":
+                    if key == entry.command.body.key:
+                        return True
+
+                case _:
+                    pass
+
+        return False
+
+    def build_quorum_read_response(self, key) -> QuorumReadResponse:
+        has_conflict = self.has_conflict(key)
+        read = self._raft_node.direct_read(key) if not has_conflict else None
+
+        return QuorumReadResponse(
+            self._raft_node.get_last_applied(),
+            read,
+            has_conflict,
+        )
+
 
 class QuorumReadResponse:
     _timestamp: int
-    # Empty if
+    # None if the key does not exist
     _data: Any | None
     # True if there is no write intent for that key
     _has_conflict: bool

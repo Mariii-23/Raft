@@ -29,8 +29,8 @@ class Node(ABC):
     _current_term: int
     _voted_for: NodeID | None
     _log: list[Entry]
-    _commit_index = 0
-    _last_applied = 0
+    _commit_index: int = 0
+    _last_applied: int = 0
 
     def __init__(self, node_id: NodeID, node_ids: list[NodeID]) -> None:
         self._node_id = node_id
@@ -152,6 +152,15 @@ class Node(ABC):
         if my_term != last_log_term:
             return last_log_term > my_term
         return last_log_index >= len(self._log)
+
+    def direct_read(self, key) -> Any:
+        return self._store.read(key)
+
+    def get_last_applied(self) -> int:
+        return self._last_applied
+
+    def get_log(self) -> list[Entry]:
+        return self._log
 
 
 from node.follower import Follower
