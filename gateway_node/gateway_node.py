@@ -11,6 +11,50 @@ MsgID = int
 ClientID = int
 
 
+class QuorumReadResponse:
+    _timestamp: int
+    # None if the key does not exist
+    _data: Any | None
+    # True if there is no write intent for that key
+    _has_conflict: bool
+
+    def __init__(self, timestamp: int, data: Any, has_conflict: bool):
+        self._timestamp = timestamp
+        self._data = data
+        self._has_conflict = has_conflict
+
+    def has_conflict(self) -> bool:
+        return self.has_conflict()
+
+    def get_data(self) -> Any:
+        return self._data
+
+    def get_timestamp(self) -> int:
+        return self._timestamp
+
+
+class QuorumReadState:
+    _client_id: ClientID
+    _number_responses: int
+    _most_updated_response: QuorumReadResponse
+
+    def __init__(self, client_id: ClientID, most_updated_response: QuorumReadResponse):
+        self._client_id = client_id
+        self._number_responses = 1
+        self._most_updated_response = most_updated_response
+
+    def update(self, response: QuorumReadResponse):
+        if response._timestamp > self._most_updated_response._timestamp:
+            self._most_updated_response = response
+            self._number_responses += 1
+
+    def get_number_responses(self):
+        return self._number_responses
+
+    def get_most_updated(self):
+        return self._most_updated_response
+
+
 class GatewayNode:
     _raft_node: Node
     _node_id: NodeID
@@ -39,6 +83,9 @@ class GatewayNode:
             return math.comb(n - 3, math.ceil(n / 2) - 1) / math.comb(
                 n - 2, math.ceil(n / 2)
             )
+
+    def compute_excluding_majority(self) -> int:
+        return math.ceil(len(self._node_ids) / 2)
 
     def handle(self, msg):
 
@@ -75,8 +122,55 @@ class GatewayNode:
             **quorum_read_response.__dict__,
         )
 
-    def handle_quorum_read_response(self, msg):
-        pass
+    def handle_quorum_read_response(self, msg) -> None:
+        client_req_id = msg.body.client_req_id
+
+        if msg.body.client_req_id in self._quorum_responses:
+            quorum_read_state = self._quorum_responses[msg.body.client_req_id]
+            response = QuorumReadResponse(
+                msg.body.timestamp, msg.body.data, msg.body.has_conflict
+            )
+            quorum_read_state.update(response)
+            number_responses = quorum_read_state.get_number_responses()
+            if self.has_quorum_responses(number_responses):
+                self.reply_to_client_read(client_req_id, quorum_read_state)
+                self._quorum_responses.pop(msg.body.client_req_id)
+
+    def has_quorum_responses(self, number_responses: int) -> bool:
+        return number_responses > self.compute_excluding_majority()
+
+    def reply_to_client_read(
+        self, client_req_id: MsgID, quorum_read_state: QuorumReadState
+    ) -> None:
+        most_updated_response = quorum_read_state.get_most_updated()
+        if most_updated_response.has_conflict():
+            send(
+                self._node_id,
+                quorum_read_state._client_id,
+                in_reply_to=client_req_id,
+                type="error",
+                code="11",
+                text="Write conflict for key",
+            )
+        else:
+            value = most_updated_response.get_data()
+            if value:
+                send(
+                    self._node_id,
+                    quorum_read_state._client_id,
+                    in_reply_to=client_req_id,
+                    type="read_ok",
+                    value=value,
+                )
+            else:
+                send(
+                    self._node_id,
+                    quorum_read_state._client_id,
+                    in_reply_to=client_req_id,
+                    type="error",
+                    code="20",
+                    text="key not found",
+                )
 
     def handle_leaseholder_read(self, msg):
         pass
@@ -89,7 +183,7 @@ class GatewayNode:
 
     def quorum_read(self, msg):
         # majority of all nodes, not counting with self
-        majority = math.ceil(len(self._node_ids) / 2)
+        majority = self.compute_excluding_majority()
         quorum = sample(self._node_ids, majority)
         for node_id in quorum:
             send(
@@ -101,8 +195,6 @@ class GatewayNode:
             )
         my_quorum_response = self.build_quorum_read_response(msg.key)
         self._quorum_responses[msg.id] = QuorumReadState(msg.id, my_quorum_response)
-        # esperar até ter maioria + 1 no dicionario
-        # fazer reset ao dicionario
 
     def has_conflict(self, key) -> bool:
         log = self._raft_node.get_log()
@@ -113,7 +205,6 @@ class GatewayNode:
                 case "write" | "cas":
                     if key == entry.command.body.key:
                         return True
-
                 case _:
                     pass
 
@@ -121,34 +212,10 @@ class GatewayNode:
 
     def build_quorum_read_response(self, key) -> QuorumReadResponse:
         has_conflict = self.has_conflict(key)
-        read = self._raft_node.direct_read(key) if not has_conflict else None
+        data = self._raft_node.direct_read(key) if not has_conflict else None
 
         return QuorumReadResponse(
             self._raft_node.get_last_applied(),
-            read,
+            data,
             has_conflict,
         )
-
-
-class QuorumReadResponse:
-    _timestamp: int
-    # None if the key does not exist
-    _data: Any | None
-    # True if there is no write intent for that key
-    _has_conflict: bool
-
-    def __init__(self, timestamp: int, data: Any, has_conflict: bool):
-        self._timestamp = timestamp
-        self._data = data
-        self._has_conflict = has_conflict
-
-
-class QuorumReadState:
-    _client_id: ClientID
-    _number_responses: int
-    _most_updated_response: QuorumReadResponse
-
-    def __init__(self, client_id: ClientID, most_updated_response: QuorumReadResponse):
-        self._client_id = client_id
-        self._number_responses = 1
-        self._most_updated_response = most_updated_response
