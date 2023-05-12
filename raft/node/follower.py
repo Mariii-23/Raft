@@ -9,11 +9,13 @@ from raft.config import LOWER_TIMEOUT, UPPER_TIMEOUT
 
 class Follower(Node):
     _timer: RandomTimer
+    _leader_id: NodeID | None
 
     def __init__(self, node_id: NodeID, node_ids: list[NodeID]) -> None:
         super().__init__(node_id, node_ids)
         self._timer = RandomTimer(LOWER_TIMEOUT, UPPER_TIMEOUT, self.handle_timeout)
         self._timer.start()
+        self._leader_id = None
         logging.info("init follower")
 
     @classmethod
@@ -26,6 +28,7 @@ class Follower(Node):
 
     def handle_append_entries(self, msg) -> Follower:
         self._timer.reset()
+        self._leader_id = msg.body.leader_id
 
         # 1 . Older term &&
         # 2. Log doesn't contain entry at prev_log_index which matches prev term
@@ -66,3 +69,6 @@ class Follower(Node):
     def handle_request_vote(self, msg):
         self._timer.reset()
         return super().handle_request_vote(msg)
+
+    def get_leader_id(self) -> NodeID | None:
+        return self._leader_id

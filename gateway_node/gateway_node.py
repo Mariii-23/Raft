@@ -27,7 +27,7 @@ class QuorumReadResponse:
         self._has_conflict = has_conflict
 
     def has_conflict(self) -> bool:
-        return self.has_conflict()
+        return self._has_conflict
 
     def get_data(self) -> Any:
         return self._data
@@ -47,9 +47,10 @@ class QuorumReadState:
         self._most_updated_response = most_updated_response
 
     def update(self, response: QuorumReadResponse):
-        if response._timestamp > self._most_updated_response._timestamp:
+        if response.get_timestamp() > self._most_updated_response.get_timestamp():
             self._most_updated_response = response
-            self._number_responses += 1
+
+        self._number_responses += 1
 
     def get_number_responses(self):
         return self._number_responses
@@ -91,20 +92,17 @@ class GatewayNode:
         return math.ceil(len(self._node_ids) / 2)
 
     def handle(self, msg):
-        match msg.body.type:
-            case "write" | "cas":
-                self._raft_node = self._raft_node.handle(msg)
-            case _:
-                getattr(self, "handle_" + msg.body.type, self.handle_unknown_message)(
-                    msg
-                )
+        getattr(self, "handle_" + msg.body.type, self.handle_raft_message)(msg)
 
-    def handle_unknown_message(self, msg):
-        logging.warning(f"Unknown message type {msg.body.type}")
+    def handle_raft_message(self, msg):
+        self._raft_node = self._raft_node.handle(msg)
 
     def handle_read(self, msg) -> None:
         if self.is_leaseholder():
-            pass
+            if value := self._raft_node.direct_read(msg.body.key):
+                reply(msg, type="read_ok", value=value)
+            else:
+                reply(msg, type="error", code=20, text="key not found")
         else:
             chosen_value = uniform(0, 1)
             if chosen_value <= self._quorum_read_fraction:
@@ -118,7 +116,9 @@ class GatewayNode:
             msg,
             type="quorum_read_response",
             client_req_id=msg.body.client_req_id,
-            **quorum_read_response.__dict__,
+            timestamp=quorum_read_response.get_timestamp(),
+            data=quorum_read_response.get_data(),
+            has_conflict=quorum_read_response.has_conflict(),
         )
 
     def handle_quorum_read_response(self, msg) -> None:
@@ -179,7 +179,7 @@ class GatewayNode:
                 success=True,
                 value=self._raft_node.direct_read(msg.body.key),
                 client_id=msg.body.client_id,
-                in_reply_to=msg.body.in_reply_to,
+                client_req_id=msg.body.client_req_id,
             )
         else:
             reply(
@@ -187,7 +187,7 @@ class GatewayNode:
                 type="leaseholder_read_response",
                 success=False,
                 client_id=msg.body.client_id,
-                in_reply_to=msg.body.in_reply_to,
+                client_req_id=msg.body.client_req_id,
             )
 
     def handle_leaseholder_read_response(self, msg) -> None:
@@ -196,7 +196,7 @@ class GatewayNode:
                 send(
                     self._node_id,
                     msg.body.client_id,
-                    in_reply_to=msg.body.in_reply_to,
+                    in_reply_to=msg.body.client_req_id,
                     type="read_ok",
                     value=msg.body.value,
                 )
@@ -204,7 +204,7 @@ class GatewayNode:
                 send(
                     self._node_id,
                     msg.body.client_id,
-                    in_reply_to=msg.body.in_reply_to,
+                    in_reply_to=msg.body.client_req_id,
                     type="error",
                     code=20,
                     text="key not found",
@@ -213,20 +213,32 @@ class GatewayNode:
             send(
                 self._node_id,
                 msg.body.client_id,
-                in_reply_to=msg.body.in_reply_to,
+                in_reply_to=msg.body.client_req_id,
                 type="error",
                 code=11,
                 text="outdated leaseholder",
             )
 
     def handle_delete_quorum_state(self, msg) -> None:
-        self._quorum_responses.pop(msg.body.msg_id, None)
+        self._quorum_responses.pop(msg.body.msg_id_to_delete, None)
 
     def leaseholder_read(self, msg) -> None:
-        if value := self._raft_node.direct_read(msg.body.key):
-            reply(msg, type="read_ok", value=value)
+        if leaseholder_id := self.get_leasholder_id():
+            send(
+                self._node_id,
+                leaseholder_id,
+                type="leaseholder_read",
+                key=msg.body.key,
+                client_id=msg.src,
+                client_req_id=msg.id,
+            )
         else:
-            reply(msg, type="error", code=20, text="key not found")
+            reply(
+                msg,
+                type="error",
+                code=11,
+                text="no leaseholder known",
+            )
 
     def quorum_read(self, msg) -> None:
         # majority of all nodes, not counting with self
@@ -237,11 +249,11 @@ class GatewayNode:
                 self._node_id,
                 node_id,
                 type="quorum_read",
-                key=msg.key,
+                key=msg.body.key,
                 client_req_id=msg.id,
             )
-        my_quorum_response = self.build_quorum_read_response(msg.key)
-        self._quorum_responses[msg.id] = QuorumReadState(msg.id, my_quorum_response)
+        my_quorum_response = self.build_quorum_read_response(msg.body.key)
+        self._quorum_responses[msg.id] = QuorumReadState(msg.src, my_quorum_response)
         Timer(HEARTBIT_RATE * 2, lambda: self.delete_quorum_state(msg.id)).start()
 
     def delete_quorum_state(self, msg_id: MsgID) -> None:
@@ -249,7 +261,7 @@ class GatewayNode:
             self._node_id,
             self._node_id,
             type="delete_quorum_state",
-            msg_id=msg_id,
+            msg_id_to_delete=msg_id,
         )
 
     def has_conflict(self, key) -> bool:
@@ -268,6 +280,9 @@ class GatewayNode:
 
     def is_leaseholder(self) -> bool:
         return self._raft_node.is_leader()
+
+    def get_leasholder_id(self) -> NodeID | None:
+        return self._raft_node.get_leader_id()
 
     def build_quorum_read_response(self, key) -> QuorumReadResponse:
         has_conflict = self.has_conflict(key)

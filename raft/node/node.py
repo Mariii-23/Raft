@@ -106,7 +106,12 @@ class Node(ABC):
         return self
 
     def handle_kvs_op(self, msg) -> Node:
-        reply(msg, type="error", code=11, text="only the leader can handle requests")
+        reply(
+            msg,
+            type="error",
+            code=11,
+            text=f"only the leader can handle {msg.body.type} requests",
+        )
         return self
 
     def apply(self) -> None:
@@ -164,6 +169,9 @@ class Node(ABC):
 
     def is_leader(self) -> bool:
         return isinstance(self, Leader)
+
+    def get_leader_id(self) -> NodeID | None:
+        return None
 
 
 from raft.node.follower import Follower
