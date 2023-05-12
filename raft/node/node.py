@@ -1,12 +1,11 @@
 from __future__ import annotations
 from abc import ABC
 from typing import Any
-from utils.ms import reply
-from utils.random_timer import RandomTimer
+from raft.utils.ms import reply
+from raft.utils.random_timer import RandomTimer
 from multitimer import MultiTimer
 import logging
-from key_value_store import KeyValueStore
-from node.leader import Leader
+from raft.key_value_store import KeyValueStore
 
 NodeID = str
 
@@ -167,4 +166,5 @@ class Node(ABC):
         return isinstance(self, Leader)
 
 
-from node.follower import Follower
+from raft.node.follower import Follower
+from raft.node.leader import Leader

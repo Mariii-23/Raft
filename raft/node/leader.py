@@ -1,10 +1,10 @@
 from __future__ import annotations
 from math import ceil
-from node.node import Node, NodeID, Entry
-from utils.ms import send, reply
+from raft.node.node import Node, NodeID, Entry
+from raft.utils.ms import send, reply
 import logging
 from multitimer import MultiTimer
-from config import HEARTBIT_RATE
+from raft.config import HEARTBIT_RATE
 
 
 class Leader(Node):
@@ -15,8 +15,7 @@ class Leader(Node):
 
     def __init__(self, node_id: NodeID, node_ids: list[NodeID]):
         super().__init__(node_id, node_ids)
-        self._timer = MultiTimer(
-            HEARTBIT_RATE, self.heartbeat, runonstart=False)
+        self._timer = MultiTimer(HEARTBIT_RATE, self.heartbeat, runonstart=False)
         self._timer.start()
         self._next_index = dict.fromkeys(node_ids, 1)
         self._match_index = dict.fromkeys(node_ids, 0)
@@ -138,8 +137,7 @@ class Leader(Node):
         # a majority of matchIndex[i] >= N,
         # and log[N].term == currentTerm:
         #   set commitIndex = N
-        log_indexes = [i for i in self._match_index.values() if i >
-                       self._commit_index]
+        log_indexes = [i for i in self._match_index.values() if i > self._commit_index]
         majority = ceil(len(self._node_ids) / 2)
 
         if len(log_indexes) >= majority:

@@ -1,10 +1,10 @@
 from __future__ import annotations
-from node.candidate import Candidate
+from raft.node.candidate import Candidate
 import logging
-from node.node import Node, NodeID
-from utils.ms import reply, send
-from utils.random_timer import RandomTimer
-from config import LOWER_TIMEOUT, UPPER_TIMEOUT
+from raft.node.node import Node, NodeID
+from raft.utils.ms import reply, send
+from raft.utils.random_timer import RandomTimer
+from raft.config import LOWER_TIMEOUT, UPPER_TIMEOUT
 
 
 class Follower(Node):
