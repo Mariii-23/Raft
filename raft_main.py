@@ -1,10 +1,10 @@
 #!/usr/bin/env python
 
 import logging
-from utils.ms import receive_all, reply, exit_on_error
+from raft.utils.ms import receive_all, reply, exit_on_error
 from concurrent.futures import ThreadPoolExecutor
-from node.node import Node
-from node.follower import Follower
+from raft.node.node import Node
+from raft.node.follower import Follower
 
 
 logging.getLogger().setLevel(logging.DEBUG)
