@@ -5,7 +5,6 @@ from utils.ms import receive_all, reply, exit_on_error
 from concurrent.futures import ThreadPoolExecutor
 from node.node import Node
 from node.follower import Follower
-from key_value_store import KeyValueStore
 
 
 logging.getLogger().setLevel(logging.DEBUG)
