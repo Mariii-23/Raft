@@ -70,13 +70,13 @@ class GatewayNode:
         self._quorum_read_fraction = self.compute_quorum_read_fraction()
         self._quorum_responses = {}
 
-    def compute_quorum_read_fraction(self):
+    def compute_quorum_read_fraction(self) -> float:
         # Current node id was already removed
         n = len(self._node_ids) + 1
         p = self.prob_included_majority()
         return 1 - ((p * (n - 2)) / (n + p * (n - 2)))
 
-    def prob_included_majority(self):
+    def prob_included_majority(self) -> float:
         n = len(self._node_ids) + 1
         if n == 3:
             return 1
@@ -100,7 +100,7 @@ class GatewayNode:
     def handle_unknown_message(self, msg):
         logging.warning(f"Unknown message type {msg.body.type}")
 
-    def handle_read(self, msg):
+    def handle_read(self, msg) -> None:
         if self.is_leaseholder():
             pass
         else:
@@ -110,7 +110,7 @@ class GatewayNode:
             else:
                 self.leaseholder_read(msg)
 
-    def handle_quorum_read(self, msg):
+    def handle_quorum_read(self, msg) -> None:
         quorum_read_response = self.build_quorum_read_response(msg.body.key)
         reply(
             msg,
@@ -169,16 +169,61 @@ class GatewayNode:
                     text="key not found",
                 )
 
-    def handle_leaseholder_read(self, msg):
-        pass
+    def handle_leaseholder_read(self, msg) -> None:
+        if self.is_leaseholder():
+            reply(
+                msg,
+                type="leaseholder_read_response",
+                success=True,
+                value=self._raft_node.direct_read(msg.body.key),
+                client_id=msg.body.client_id,
+                in_reply_to=msg.body.in_reply_to,
+            )
+        else:
+            reply(
+                msg,
+                type="leaseholder_read_response",
+                success=False,
+                client_id=msg.body.client_id,
+                in_reply_to=msg.body.in_reply_to,
+            )
 
-    def handle_leaseholder_read_response(self, msg):
-        pass
+    def handle_leaseholder_read_response(self, msg) -> None:
+        if msg.body.success:
+            if not msg.body.value:
+                send(
+                    self._node_id,
+                    msg.body.client_id,
+                    in_reply_to=msg.body.in_reply_to,
+                    type="error",
+                    code=20,
+                    text="key not found",
+                )
+            else:
+                send(
+                    self._node_id,
+                    msg.body.client_id,
+                    in_reply_to=msg.body.in_reply_to,
+                    type="read_ok",
+                    value=msg.body.value,
+                )
+        else:
+            send(
+                self._node_id,
+                msg.body.client_id,
+                in_reply_to=msg.body.in_reply_to,
+                type="error",
+                code=11,
+                text="outdated leaseholder",
+            )
 
-    def leaseholder_read(self, msg):
-        pass
+    def leaseholder_read(self, msg) -> None:
+        if value := self._raft_node.direct_read(msg.body.key):
+            reply(msg, type="read_ok", value=value)
+        else:
+            reply(msg, type="error", code=20, text="key not found")
 
-    def quorum_read(self, msg):
+    def quorum_read(self, msg) -> None:
         # majority of all nodes, not counting with self
         majority = self.compute_excluding_majority()
         quorum = sample(self._node_ids, majority)
@@ -206,6 +251,9 @@ class GatewayNode:
                     pass
 
         return False
+
+    def is_leaseholder(self) -> bool:
+        return self._raft_node.is_leader()
 
     def build_quorum_read_response(self, key) -> QuorumReadResponse:
         has_conflict = self.has_conflict(key)

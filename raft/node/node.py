@@ -6,6 +6,7 @@ from utils.random_timer import RandomTimer
 from multitimer import MultiTimer
 import logging
 from key_value_store import KeyValueStore
+from node.leader import Leader
 
 NodeID = str
 
@@ -161,6 +162,9 @@ class Node(ABC):
 
     def get_log(self) -> list[Entry]:
         return self._log
+
+    def is_leader(self) -> bool:
+        return isinstance(self, Leader)
 
 
 from node.follower import Follower
