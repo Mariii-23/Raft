@@ -1,7 +1,13 @@
+from __future__ import annotations
 from raft.node.node import Node, NodeID
 from raft.node.follower import Follower
 import math
 from random import uniform
+from typing import Tuple, Any
+
+
+MsgID = int
+ClientID = int
 
 
 class GatewayNode:
@@ -9,6 +15,7 @@ class GatewayNode:
     _node_id: NodeID
     _node_ids: list[NodeID]
     _quorum_read_fraction: float
+    _quorum_responses: dict[MsgID, QuorumReadState]
 
     def __init__(self, node_id: NodeID, node_ids: list[NodeID]):
         self._node_id = node_id
@@ -73,3 +80,23 @@ class GatewayNode:
 
     def quorum_read(self, msg):
         pass
+
+
+class QuorumReadResponse:
+    _timestamp: int
+    _data: Any
+
+    def __init__(self, timestamp: int, data: Any):
+        self._timestamp = timestamp
+        self._data = data
+
+
+class QuorumReadState:
+    _client_id: ClientID
+    _number_responses: int
+    _most_updated_response: QuorumReadResponse | None
+
+    def __init__(self, client_id: ClientID):
+        self._client_id = client_id
+        self._number_responses = 0
+        self._most_updated_response = None
