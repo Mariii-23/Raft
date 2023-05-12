@@ -6,6 +6,8 @@ from raft.utils.ms import send, reply
 import math
 from random import uniform, sample
 from typing import Any
+from threading import Timer
+from raft.config import HEARTBIT_RATE
 
 
 MsgID = int
@@ -190,7 +192,15 @@ class GatewayNode:
 
     def handle_leaseholder_read_response(self, msg) -> None:
         if msg.body.success:
-            if not msg.body.value:
+            if msg.body.value:
+                send(
+                    self._node_id,
+                    msg.body.client_id,
+                    in_reply_to=msg.body.in_reply_to,
+                    type="read_ok",
+                    value=msg.body.value,
+                )
+            else:
                 send(
                     self._node_id,
                     msg.body.client_id,
@@ -198,14 +208,6 @@ class GatewayNode:
                     type="error",
                     code=20,
                     text="key not found",
-                )
-            else:
-                send(
-                    self._node_id,
-                    msg.body.client_id,
-                    in_reply_to=msg.body.in_reply_to,
-                    type="read_ok",
-                    value=msg.body.value,
                 )
         else:
             send(
@@ -216,6 +218,9 @@ class GatewayNode:
                 code=11,
                 text="outdated leaseholder",
             )
+
+    def handle_delete_quorum_state(self, msg) -> None:
+        self._quorum_responses.pop(msg.body.msg_id, None)
 
     def leaseholder_read(self, msg) -> None:
         if value := self._raft_node.direct_read(msg.body.key):
@@ -237,6 +242,15 @@ class GatewayNode:
             )
         my_quorum_response = self.build_quorum_read_response(msg.key)
         self._quorum_responses[msg.id] = QuorumReadState(msg.id, my_quorum_response)
+        Timer(HEARTBIT_RATE * 2, lambda: self.delete_quorum_state(msg.id)).start()
+
+    def delete_quorum_state(self, msg_id: MsgID) -> None:
+        send(
+            self._node_id,
+            self._node_id,
+            type="delete_quorum_state",
+            msg_id=msg_id,
+        )
 
     def has_conflict(self, key) -> bool:
         log = self._raft_node.get_log()
