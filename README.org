@@ -1,0 +1,11 @@
+#+TITLE: Raft Consensus Protocol - Read Scalability Improvement
+
+* Introduction
+Raft is a consensus algorithm in distributed systems, used to manage replicas of a log. This allows a set of machines (nodes) to behave as a coherent group, capable of tolerating failures of some of its members without compromising the log. To ensure strong consistency, all client-initiated read and write requests must go through the leader. The remaining nodes are used as "cold standbys," never responding directly to the client. However, this poses a scalability issue and underutilizes available resources. The leader is overloaded with requests, while followers merely replicate the values sent by it.
+
+* Scalability Improvement Proposal
+To address scalability concerns, the paper "Leader or Majority: Why have one when you can have both? Improving Read Scalability in Raft-like consensus protocols" proposes a variation of the Raft protocol. This variation allows replicas, in addition to the leader, to respond to read requests under certain conditions, thereby distributing the workload. This distribution is possible because a committed value must be replicated in a majority of servers. Consequently, by performing a read from a majority, it is guaranteed that the value is present. This work aims to explore the effectiveness of the proposed strategy, comparing it with the standard Raft protocol, using the Maelstrom framework to simulate a distributed system.
+
+
+* Achievement:
+We are proud to announce that the project received an evaluation of 17.8 out of 20 points.
